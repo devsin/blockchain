@@ -12,7 +12,7 @@ import (
 
 // Difficulty
 // in real life this should be dynamic
-const Difficulty = 13
+const Difficulty = 14
 
 type ProofOfWork struct {
 	Block  *Block
