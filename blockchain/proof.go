@@ -30,7 +30,7 @@ func (pow *ProofOfWork) InitData(nonce int) []byte {
 	data := bytes.Join(
 		[][]byte{
 			pow.Block.PrevHash,
-			pow.Block.Data,
+			pow.Block.HashTransaction(),
 			ToHex(int64(nonce)),
 			ToHex(int64(Difficulty)),
 		},
@@ -42,11 +42,9 @@ func (pow *ProofOfWork) Run() (int, []byte) {
 	var intHash big.Int
 	var hash [32]byte
 	nonce := 0
-
 	for nonce < math.MaxInt {
 		data := pow.InitData(nonce)
 		hash = sha256.Sum256(data)
-
 		fmt.Printf("\r%x", hash)
 		intHash.SetBytes(hash[:])
 		if intHash.Cmp(pow.Target) == -1 {
@@ -55,7 +53,6 @@ func (pow *ProofOfWork) Run() (int, []byte) {
 			nonce++
 		}
 	}
-
 	fmt.Println("")
 	return nonce, hash[:]
 }
