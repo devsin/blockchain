@@ -15,9 +15,7 @@ type CommandLine struct{}
 
 func (cli *CommandLine) printUsage() {
 	fmt.Println("Usage:")
-	fmt.Println("init -address ADDRESS - initialize database with genesis block")
 	fmt.Println("blockchain -address ADDRESS - creates a blockchain")
-	fmt.Println("print - Prints the blocks in the chain")
 	fmt.Println("print - Prints the blocks in the chain")
 	fmt.Println("send -from FROM - to TO -amount AMOUNT - Send amount")
 	fmt.Println("wallet - Creates a new wallet")
@@ -56,6 +54,9 @@ func (cli *CommandLine) printChain() {
 		fmt.Printf("Current Hash: %x\n", block.Hash)
 		pow := blockchain.NewProof(block)
 		fmt.Printf("PoW: %s\n", strconv.FormatBool(pow.Validate()))
+		for _, tx := range block.Transactions {
+			fmt.Println(tx)
+		}
 		fmt.Println("===========")
 		if len(block.PrevHash) == 0 {
 			break
@@ -64,18 +65,21 @@ func (cli *CommandLine) printChain() {
 }
 
 func (cli *CommandLine) createBlockchain(address string) {
-	chain := blockchain.ContinueBlockchain(address)
-	chain.Database.Close()
-	fmt.Println("Finished!")
-}
-
-func (cli *CommandLine) initBlockchain(address string) {
+	if !wallet.ValidateAddress(address) {
+		log.Panic("Address is not Valid")
+	}
 	chain := blockchain.InitBlockchain(address)
 	chain.Database.Close()
 	fmt.Println("Finished!")
 }
 
 func (cli *CommandLine) send(from, to string, amount int) {
+	if !wallet.ValidateAddress(from) {
+		log.Panic("Sender address is not valid!")
+	}
+	if !wallet.ValidateAddress(to) {
+		log.Panic("Receiver address is not valid!")
+	}
 	chain := blockchain.ContinueBlockchain(from)
 	defer chain.Database.Close()
 	tx := blockchain.NewTransaction(from, to, amount, chain)
@@ -84,10 +88,15 @@ func (cli *CommandLine) send(from, to string, amount int) {
 }
 
 func (cli *CommandLine) getBalance(address string) {
+	if !wallet.ValidateAddress(address) {
+		log.Panic("Address is not valid!")
+	}
 	chain := blockchain.ContinueBlockchain(address)
 	defer chain.Database.Close()
 	balance := 0
-	UTXOs := chain.FindUTXO(address)
+	pubKeyHash := wallet.Base58Decode([]byte(address))
+	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-4]
+	UTXOs := chain.FindUTXO(pubKeyHash)
 	for _, out := range UTXOs {
 		balance += out.Value
 	}
@@ -97,14 +106,12 @@ func (cli *CommandLine) getBalance(address string) {
 func (cli *CommandLine) Run() {
 	cli.validateArgs()
 	getBalanceCmd := flag.NewFlagSet("balance", flag.ExitOnError)
-	initBlockchainCmd := flag.NewFlagSet("init", flag.ExitOnError)
 	createBlockchainCmd := flag.NewFlagSet("blockchain", flag.ExitOnError)
 	sendCmd := flag.NewFlagSet("send", flag.ExitOnError)
 	printChainCmd := flag.NewFlagSet("print", flag.ExitOnError)
 	walletCmd := flag.NewFlagSet("wallet", flag.ExitOnError)
 	walletsCmd := flag.NewFlagSet("wallets", flag.ExitOnError)
 	getBalanceAddress := getBalanceCmd.String("address", "", "The address to get balance for")
-	initBlockchainAddress := initBlockchainCmd.String("address", "", "The address to create for genesis block")
 	createBlockchainAddress := createBlockchainCmd.String("address", "", "The address to send genesis block reward to")
 	sendFrom := sendCmd.String("from", "", "Source wallet address")
 	sendTo := sendCmd.String("to", "", "Destination wallet address")
@@ -130,11 +137,6 @@ func (cli *CommandLine) Run() {
 		if err != nil {
 			log.Panic(err)
 		}
-	case "init":
-		err := initBlockchainCmd.Parse(os.Args[2:])
-		if err != nil {
-			log.Panic(err)
-		}
 	case "wallet":
 		err := walletCmd.Parse(os.Args[2:])
 		if err != nil {
@@ -155,13 +157,6 @@ func (cli *CommandLine) Run() {
 			runtime.Goexit()
 		}
 		cli.getBalance(*getBalanceAddress)
-	}
-	if initBlockchainCmd.Parsed() {
-		if *initBlockchainAddress == "" {
-			initBlockchainCmd.Usage()
-			runtime.Goexit()
-		}
-		cli.initBlockchain(*initBlockchainAddress)
 	}
 	if createBlockchainCmd.Parsed() {
 		if *createBlockchainAddress == "" {
