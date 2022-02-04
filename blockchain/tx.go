@@ -2,12 +2,18 @@ package blockchain
 
 import (
 	"bytes"
+	"encoding/gob"
 	"github.com/nd-sin/blockchain/wallet"
+	"log"
 )
 
 type TxOutput struct {
 	Value      int
 	PubKeyHash []byte
+}
+
+type TxOutputs struct {
+	Outputs []TxOutput
 }
 
 type TxInput struct {
@@ -21,6 +27,26 @@ func NewTXOutput(value int, address string) *TxOutput {
 	txo := &TxOutput{value, nil}
 	txo.Lock([]byte(address))
 	return txo
+}
+
+func (outs TxOutputs) Serialize() []byte {
+	var buffer bytes.Buffer
+	encode := gob.NewEncoder(&buffer)
+	err := encode.Encode(outs)
+	if err != nil {
+		log.Panic(err)
+	}
+	return buffer.Bytes()
+}
+
+func DeserializeOutputs(data []byte) TxOutputs {
+	var outputs TxOutputs
+	decode := gob.NewDecoder(bytes.NewReader(data))
+	err := decode.Decode(&outputs)
+	if err != nil {
+		log.Panic(err)
+	}
+	return outputs
 }
 
 func (in *TxInput) UsesKey(pubKeyHash []byte) bool {
